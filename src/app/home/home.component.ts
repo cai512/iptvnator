@@ -1,21 +1,28 @@
+import { NgIf } from '@angular/common';
 import { Component, NgZone } from '@angular/core';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Store } from '@ngrx/store';
-import { TranslateService } from '@ngx-translate/core';
-import {
-    ERROR,
-    PLAYLIST_PARSE_BY_URL,
-    PLAYLIST_PARSE_RESPONSE,
-} from '../../../shared/ipc-commands';
+import { TranslateModule } from '@ngx-translate/core';
+import { ERROR, PLAYLIST_PARSE_RESPONSE } from '../../../shared/ipc-commands';
 import { Playlist } from '../../../shared/playlist.interface';
-import { getFilenameFromUrl } from '../../../shared/playlist.utils';
 import { DataService } from '../services/data.service';
-import { addPlaylist, parsePlaylist } from '../state/actions';
+import { HeaderComponent } from '../shared/components/header/header.component';
+import { addPlaylist } from '../state/actions';
+import { RecentPlaylistsComponent } from './recent-playlists/recent-playlists.component';
 
 @Component({
+    standalone: true,
     selector: 'app-home',
     templateUrl: './home.component.html',
     styleUrls: ['./home.component.scss'],
+    imports: [
+        HeaderComponent,
+        MatProgressBarModule,
+        NgIf,
+        RecentPlaylistsComponent,
+        TranslateModule,
+    ],
 })
 export class HomeComponent {
     /** Loading spinner state */
@@ -35,7 +42,10 @@ export class HomeComponent {
         },
         {
             id: ERROR,
-            execute: () => (this.isLoading = false),
+            execute: (error: { message: string; status: string }) => {
+                //this.isLoading = false;
+                this.showNotification('Error: ' + error.message);
+            },
         },
     ];
 
@@ -45,8 +55,7 @@ export class HomeComponent {
         private dataService: DataService,
         private ngZone: NgZone,
         private snackBar: MatSnackBar,
-        private readonly store: Store,
-        private translateService: TranslateService
+        private readonly store: Store
     ) {
         this.setRendererListeners();
     }
@@ -70,65 +79,6 @@ export class HomeComponent {
                 this.listeners.push(cb);
             }
         });
-    }
-
-    /**
-     * Shows the filename of rejected file
-     * @param filename name of the uploaded file
-     */
-    rejectFile(filename: string): void {
-        this.showNotification(
-            this.translateService.instant('HOME.FILE_UPLOAD.REJECTED', {
-                filename,
-            })
-        );
-        this.isLoading = false;
-    }
-
-    /**
-     * Parse and store uploaded playlist
-     * @param payload
-     */
-    handlePlaylist(payload: { uploadEvent: Event; file: File }): void {
-        this.isLoading = true;
-        const playlist = (payload.uploadEvent.target as FileReader)
-            .result as string;
-
-        this.store.dispatch(
-            parsePlaylist({
-                uploadType: 'FILE',
-                playlist,
-                title: payload.file.name,
-                path: payload.file.path,
-            })
-        );
-    }
-
-    /**
-     * Sends url of the playlist to the renderer process
-     * @param playlistUrl url of the added playlist
-     */
-    sendPlaylistsUrl(playlistUrl: string): void {
-        this.isLoading = true;
-        this.dataService.sendIpcEvent(PLAYLIST_PARSE_BY_URL, {
-            title: getFilenameFromUrl(playlistUrl),
-            url: playlistUrl,
-        });
-    }
-
-    /**
-     * Sends IPC event to the renderer process to parse playlist
-     * @param text playlist as string
-     */
-    uploadAsText(playlist: string): void {
-        this.isLoading = true;
-        this.store.dispatch(
-            parsePlaylist({
-                uploadType: 'TEXT',
-                playlist,
-                title: 'Imported as text',
-            })
-        );
     }
 
     /**

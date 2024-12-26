@@ -1,27 +1,27 @@
 <div id="playlists-navigation">
     <div class="current-playlist">
-        <button mat-icon-button matTooltip="Back" (click)="goBack()">
-            <mat-icon>arrow_back_ios</mat-icon>
-        </button>
-        <div class="playlist-info">
-            <div class="name">
-                <ng-container
-                    *ngIf="sidebarView === 'CHANNELS'; else allPlaylists"
-                >
-                    {{ playlistTitle$ | async }}
-                </ng-container>
-                <ng-template #allPlaylists>
-                    {{ 'HOME.PLAYLISTS.MY_PLAYLISTS' | translate }}
-                </ng-template>
-            </div>
-            <div class="channels-count">
-                {{
-                    sidebarView === 'CHANNELS'
-                        ? channels.length +
-                          ' ' +
-                          ('HOME.PLAYLISTS.CHANNELS' | translate)
-                        : ('HOME.PLAYLISTS.MY_PLAYLISTS_SUBTITLE' | translate)
-                }}
+        <div class="left">
+            <button mat-icon-button matTooltip="Back" (click)="goBack()">
+                <mat-icon>arrow_back_ios</mat-icon>
+            </button>
+            <div class="playlist-info">
+                <div class="name">
+                    @if (sidebarView === 'CHANNELS') {
+                        {{ playlistTitle$ | async }}
+                    } @else {
+                        {{ 'HOME.PLAYLISTS.MY_PLAYLISTS' | translate }}
+                    }
+                </div>
+                <div class="channels-count">
+                    {{
+                        sidebarView === 'CHANNELS'
+                            ? channels?.length +
+                              ' ' +
+                              ('HOME.PLAYLISTS.CHANNELS' | translate)
+                            : ('HOME.PLAYLISTS.MY_PLAYLISTS_SUBTITLE'
+                              | translate)
+                    }}
+                </div>
             </div>
         </div>
 
@@ -37,17 +37,14 @@
         </button>
     </div>
 </div>
-<mat-divider></mat-divider>
-<app-channel-list-container
-    *ngIf="sidebarView === 'CHANNELS'; else playlistsTemplate"
-    [channelList]="channels"
->
-</app-channel-list-container>
-<ng-template #playlistsTemplate>
+<!-- <mat-divider /> -->
+@if (sidebarView === 'CHANNELS') {
+    <app-channel-list-container [channelList]="channels" />
+} @else {
     <app-recent-playlists
         class="recent-playlists"
         [sidebarMode]="true"
         [class.electron]="dataService.isElectron"
         (playlistClicked)="selectPlaylist()"
-    ></app-recent-playlists>
-</ng-template>
+    />
+}

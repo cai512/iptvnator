@@ -1,66 +1,120 @@
-import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import {
+    CdkDragDrop,
+    DragDropModule,
+    moveItemInArray,
+} from '@angular/cdk/drag-drop';
+import { AsyncPipe, NgFor, NgIf } from '@angular/common';
 import {
     Component,
+    ElementRef,
     EventEmitter,
+    HostListener,
     Input,
     NgZone,
     OnDestroy,
     Output,
+    ViewChild,
 } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatListModule } from '@angular/material/list';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import { BehaviorSubject, combineLatest, map } from 'rxjs';
 import { GLOBAL_FAVORITES_PLAYLIST_ID } from '../../../../shared/constants';
 import { IpcCommand } from '../../../../shared/ipc-command.class';
 import { Playlist } from '../../../../shared/playlist.interface';
 import { DataService } from '../../services/data.service';
+import { DatabaseService } from '../../services/database.service';
 import * as PlaylistActions from '../../state/actions';
 import {
+    selectActiveTypeFilters,
     selectAllPlaylistsMeta,
     selectPlaylistsLoadingFlag,
 } from '../../state/selectors';
 import {
     AUTO_UPDATE_PLAYLISTS_RESPONSE,
     DELETE_ALL_PLAYLISTS,
-    IS_PLAYLISTS_MIGRATION_POSSIBLE,
-    IS_PLAYLISTS_MIGRATION_POSSIBLE_RESPONSE,
     MIGRATE_PLAYLISTS,
-    MIGRATE_PLAYLISTS_RESPONSE,
     PLAYLIST_UPDATE,
     PLAYLIST_UPDATE_RESPONSE,
 } from './../../../../shared/ipc-commands';
 import { DialogService } from './../../services/dialog.service';
 import { PlaylistMeta } from './../../shared/playlist-meta.type';
 import { PlaylistInfoComponent } from './playlist-info/playlist-info.component';
+import { PlaylistItemComponent } from './playlist-item/playlist-item.component';
 
 @Component({
+    standalone: true,
     selector: 'app-recent-playlists',
     templateUrl: './recent-playlists.component.html',
     styleUrls: ['./recent-playlists.component.scss'],
+    imports: [
+        AsyncPipe,
+        DragDropModule,
+        MatButtonModule,
+        MatDividerModule,
+        MatIconModule,
+        MatInputModule,
+        MatListModule,
+        NgFor,
+        NgIf,
+        NgxSkeletonLoaderModule,
+        PlaylistItemComponent,
+        TranslateModule,
+    ],
 })
 export class RecentPlaylistsComponent implements OnDestroy {
+    @ViewChild('searchQuery') searchQueryInput!: ElementRef<HTMLInputElement>;
+
     searchQuery = new BehaviorSubject('');
 
     playlists$ = combineLatest([
         this.store.select(selectAllPlaylistsMeta),
         this.searchQuery,
+        // eslint-disable-next-line @ngrx/avoid-combining-selectors
+        this.store.select(selectActiveTypeFilters),
     ]).pipe(
-        // eslint-disable-next-line @ngrx/avoid-mapping-selectors
-        map(([playlists, searchQuery]) =>
+        map(([playlists, searchQuery, filters]) =>
             playlists
-                .sort((a, b) => a.position - b.position)
+                .filter((item) => {
+                    const isStalkerFilter =
+                        item.macAddress && filters.includes('stalker');
+                    const isXtreamFilter =
+                        item.username &&
+                        item.password &&
+                        item.serverUrl &&
+                        filters.includes('xtream');
+                    const isM3uFilter =
+                        !item.username &&
+                        !item.password &&
+                        !item.serverUrl &&
+                        !item.macAddress &&
+                        filters.includes('m3u');
+
+                    return (
+                        (isStalkerFilter && filters.includes('stalker')) ||
+                        (isXtreamFilter && filters.includes('xtream')) ||
+                        (isM3uFilter && filters.includes('m3u'))
+                    );
+                })
                 .filter((item) =>
                     item.title.toLowerCase().includes(searchQuery.toLowerCase())
                 )
+                .sort((a, b) => a.position - b.position)
         )
     );
 
-    allPlaylistsLoaded$ = this.store.select(selectPlaylistsLoadingFlag);
+    allPlaylistsLoaded = this.store.selectSignal(selectPlaylistsLoadingFlag);
 
     @Input() sidebarMode = false;
+    @Output() playlistClicked = new EventEmitter<string>();
 
     /** IPC Renderer commands list with callbacks */
     commandsList = [
@@ -77,28 +131,6 @@ export class RecentPlaylistsComponent implements OnDestroy {
             }
         ),
         new IpcCommand(
-            IS_PLAYLISTS_MIGRATION_POSSIBLE_RESPONSE,
-            (response: { result: boolean; message: string }) => {
-                this.isMigrationPossible = response.result;
-                this.migrationMessage = response.message || '';
-            }
-        ),
-        new IpcCommand(
-            MIGRATE_PLAYLISTS_RESPONSE,
-            (response: { payload: Playlist[] }) => {
-                this.store.dispatch(
-                    PlaylistActions.addManyPlaylists({
-                        playlists: response.payload,
-                    })
-                );
-                this.snackBar.open(
-                    `${response.payload.length} playlists were successfully migrated`,
-                    null,
-                    { duration: 2000 }
-                );
-            }
-        ),
-        new IpcCommand(
             AUTO_UPDATE_PLAYLISTS_RESPONSE,
             (playlists: Playlist[]) => {
                 this.store.dispatch(
@@ -110,12 +142,8 @@ export class RecentPlaylistsComponent implements OnDestroy {
         ),
     ];
 
-    isMigrationPossible = false;
-    migrationMessage = '';
-
-    @Output() playlistClicked = new EventEmitter<string>();
-
     constructor(
+        private databaseService: DatabaseService,
         private dialog: MatDialog,
         private dialogService: DialogService,
         private electronService: DataService,
@@ -128,9 +156,6 @@ export class RecentPlaylistsComponent implements OnDestroy {
 
     ngOnInit(): void {
         this.setRendererListeners();
-        if (this.electronService.isElectron) {
-            this.electronService.sendIpcEvent(IS_PLAYLISTS_MIGRATION_POSSIBLE);
-        }
     }
 
     /**
@@ -206,7 +231,8 @@ export class RecentPlaylistsComponent implements OnDestroy {
      * Removes the provided playlist from the database
      * @param playlistId playlist id to remove
      */
-    removePlaylist(playlistId: string): void {
+    removePlaylist(playlistId: string) {
+        this.databaseService.deletePlaylist(playlistId);
         this.store.dispatch(PlaylistActions.removePlaylist({ playlistId }));
     }
 
@@ -247,5 +273,14 @@ export class RecentPlaylistsComponent implements OnDestroy {
 
     onSearchQueryUpdate(searchQuery: string) {
         this.searchQuery.next(searchQuery);
+    }
+
+    @HostListener('window:keydown.control.f', ['$event'])
+    @HostListener('window:keydown.meta.f', ['$event'])
+    onSearchHotkey(event: KeyboardEvent) {
+        // Prevent default browser search behavior
+        event.preventDefault();
+        event.stopPropagation();
+        this.searchQueryInput?.nativeElement?.focus();
     }
 }

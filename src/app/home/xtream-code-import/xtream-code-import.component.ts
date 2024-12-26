@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, EventEmitter, Output, inject } from '@angular/core';
 import {
     FormControl,
     FormGroup,
@@ -43,6 +43,7 @@ import { addPlaylist } from '../../state/actions';
     ],
 })
 export class XtreamCodeImportComponent {
+    @Output() addClicked = new EventEmitter<void>();
     URL_REGEX = /^(http|https|file):\/\/[^ "]+$/;
 
     form = new FormGroup({
@@ -61,8 +62,38 @@ export class XtreamCodeImportComponent {
     store = inject(Store);
 
     addPlaylist() {
+        const serverUrlAsString = this.form.value.serverUrl as string;
+        const url = new URL(serverUrlAsString);
+        const serverUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
         this.store.dispatch(
-            addPlaylist({ playlist: this.form.value as Playlist })
+            addPlaylist({
+                playlist: {
+                    ...this.form.value,
+                    serverUrl,
+                } as Playlist,
+            })
         );
+        this.addClicked.emit();
+    }
+
+    extractParams(urlAsString: string): void {
+        if (
+            this.form.get('username').value !== '' ||
+            this.form.get('password').value !== ''
+        )
+            return;
+        try {
+            // Create a new URL object from the complete link
+            const url = new URL(urlAsString);
+
+            // Extract username and password from query parameters
+            const username = url.searchParams.get('username') || '';
+            const password = url.searchParams.get('password') || '';
+
+            this.form.get('username')?.setValue(username);
+            this.form.get('password')?.setValue(password);
+        } catch (error) {
+            console.error('Invalid URL', error);
+        }
     }
 }

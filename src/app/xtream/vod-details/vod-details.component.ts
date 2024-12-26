@@ -8,18 +8,28 @@ import {
     inject,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
+import { MatIcon, MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { XtreamVodDetails } from '../../../../shared/xtream-vod-details.interface';
 import { PlaylistsService } from '../../services/playlists.service';
+import { SafePipe } from './safe.pipe';
 
 @Component({
     selector: 'app-vod-details',
     templateUrl: './vod-details.component.html',
     styleUrls: ['../detail-view.scss'],
     standalone: true,
-    imports: [MatButtonModule, NgIf, MatIconModule, TranslateModule],
+    imports: [
+        MatButtonModule,
+        MatIcon,
+        NgIf,
+        MatIconModule,
+        SafePipe,
+        TranslateModule,
+        MatProgressSpinnerModule,
+    ],
 })
 export class VodDetailsComponent implements OnInit {
     @Input({ required: true }) item: XtreamVodDetails;
@@ -33,6 +43,7 @@ export class VodDetailsComponent implements OnInit {
     private portalId = this.route.snapshot.paramMap.get('id');
 
     isFavorite = false;
+    isLoading = false;
 
     ngOnInit(): void {
         this.checkFavoriteStatus();
@@ -42,11 +53,21 @@ export class VodDetailsComponent implements OnInit {
         this.playlistService
             .getPortalFavorites(this.portalId)
             .subscribe((favorites) => {
-                this.isFavorite = favorites.some(
-                    (i) =>
-                        i?.stream_id === this.item?.movie_data?.stream_id ||
-                        (i as any)?.details?.id === (this.item as any)?.id
-                );
+                this.isFavorite = favorites.some((i) => {
+                    const hasStreamId =
+                        i?.stream_id !== undefined &&
+                        this.item?.movie_data?.stream_id !== undefined;
+                    const hasId =
+                        (i as any)?.details?.id !== undefined &&
+                        (this.item as any)?.id !== undefined;
+
+                    return (
+                        (hasStreamId &&
+                            i.stream_id === this.item.movie_data.stream_id) ||
+                        (hasId &&
+                            (i as any).details.id === (this.item as any).id)
+                    );
+                });
             });
     }
 
@@ -67,7 +88,7 @@ export class VodDetailsComponent implements OnInit {
                 });
             } else {
                 this.addToFavoritesClicked.emit({
-                    name: this.item.info.name,
+                    name: this.item.movie_data.name,
                     stream_id: this.item.movie_data.stream_id,
                     container_extension:
                         this.item.movie_data.container_extension,

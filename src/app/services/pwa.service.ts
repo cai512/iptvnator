@@ -1,10 +1,11 @@
 import { HttpClient } from '@angular/common/http';
-import { ApplicationRef, inject, Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Params } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
-import { catchError, throwError } from 'rxjs';
+import { catchError, EMPTY, throwError } from 'rxjs';
 import {
     ERROR,
     PLAYLIST_PARSE_BY_URL,
@@ -19,23 +20,21 @@ import { Playlist } from '../../../shared/playlist.interface';
 import { AppConfig } from '../../environments/environment';
 import * as PlaylistActions from '../state/actions';
 import { DataService } from './data.service';
-import { PlaylistsService } from './playlists.service';
 
 @Injectable({
     providedIn: 'root',
 })
 export class PwaService extends DataService {
-    appRef = inject(ApplicationRef);
-    playlistService = inject(PlaylistsService);
-    snackBar = inject(MatSnackBar);
-    store = inject(Store);
-    swUpdate = inject(SwUpdate);
-    translateService = inject(TranslateService);
+    private readonly http = inject(HttpClient);
+    private readonly snackBar = inject(MatSnackBar);
+    private readonly store = inject(Store);
+    private readonly swUpdate = inject(SwUpdate);
+    private readonly translateService = inject(TranslateService);
 
     /** Proxy URL to avoid CORS issues */
     corsProxyUrl = AppConfig.BACKEND_URL;
 
-    constructor(private http: HttpClient) {
+    constructor() {
         super();
         console.log('PWA service initialized...');
     }
@@ -172,12 +171,30 @@ export class PwaService extends DataService {
                 },
                 ...headers,
             })
+            .pipe(
+                catchError((response) => {
+                    window.postMessage({
+                        type: ERROR,
+                        status: response.error.status,
+                        message: response.error.message ?? 'Unknown error',
+                    });
+                    return EMPTY;
+                })
+            )
             .subscribe((response) => {
-                window.postMessage({
-                    type: XTREAM_RESPONSE,
-                    payload: (response as any).payload,
-                    action: payload.params.action,
-                });
+                if (!(response as any).payload) {
+                    window.postMessage({
+                        type: ERROR,
+                        status: (response as any).status,
+                        message: (response as any).message ?? 'Unknown error',
+                    });
+                } else {
+                    window.postMessage({
+                        type: XTREAM_RESPONSE,
+                        payload: (response as any).payload,
+                        action: payload.params.action,
+                    });
+                }
             });
     }
 
@@ -215,5 +232,13 @@ export class PwaService extends DataService {
 
     listenOn(_command: string, callback: (...args: any[]) => void): void {
         window.addEventListener('message', callback);
+    }
+
+    getAppEnvironment(): string {
+        return 'pwa';
+    }
+
+    fetchData(url: string, queryParams: Params) {
+        // not implemented
     }
 }

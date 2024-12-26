@@ -36,34 +36,32 @@ describe('AppComponent', () => {
     let whatsNewService: WhatsNewService;
     const defaultLanguage = 'en';
 
-    beforeEach(
-        waitForAsync(() => {
-            TestBed.configureTestingModule({
-                declarations: [AppComponent, MockPipe(TranslatePipe)],
-                providers: [
-                    { provide: WhatsNewService, useClass: WhatsNewServiceStub },
-                    MockProviders(
-                        TranslateService,
-                        PlaylistsService,
-                        NgxIndexedDBService,
-                        MatSnackBar
-                    ),
-                    SettingsService,
-                    {
-                        provide: DataService,
-                        useClass: ElectronServiceStub,
-                    },
-                    provideMockStore(),
-                ],
-                imports: [
-                    MockModule(MatSnackBarModule),
-                    MockModule(NgxWhatsNewModule),
-                    RouterTestingModule,
-                    HttpClientTestingModule,
-                ],
-            }).compileComponents();
-        })
-    );
+    beforeEach(waitForAsync(() => {
+        TestBed.configureTestingModule({
+            declarations: [AppComponent, MockPipe(TranslatePipe)],
+            providers: [
+                { provide: WhatsNewService, useClass: WhatsNewServiceStub },
+                MockProviders(
+                    TranslateService,
+                    PlaylistsService,
+                    NgxIndexedDBService,
+                    MatSnackBar
+                ),
+                SettingsService,
+                {
+                    provide: DataService,
+                    useClass: ElectronServiceStub,
+                },
+                provideMockStore(),
+            ],
+            imports: [
+                MockModule(MatSnackBarModule),
+                MockModule(NgxWhatsNewModule),
+                RouterTestingModule,
+                HttpClientTestingModule,
+            ],
+        }).compileComponents();
+    }));
 
     beforeEach(() => {
         electronService = TestBed.inject(DataService);
@@ -76,6 +74,7 @@ describe('AppComponent', () => {
         // TODO: investigate in detail
         component.triggerAutoUpdateMechanism = jest.fn();
         component.modals = [];
+        component.checkForUpdates = jest.fn();
         fixture.detectChanges();
     });
 
@@ -203,7 +202,7 @@ describe('AppComponent', () => {
     describe('Set initial settings', () => {
         const theme = Theme.DarkTheme;
         const language = 'es';
-        const epgUrl = 'http://localhost/epg.xml';
+        const epgUrl = ['http://localhost/epg.xml'];
 
         beforeEach(() => {
             jest.spyOn(electronService, 'sendIpcEvent');
@@ -247,7 +246,7 @@ describe('AppComponent', () => {
 
             expect(spyOnSettingsGet).toHaveBeenCalledWith(STORE_KEY.Settings);
             expect(settingsService.changeTheme).toHaveBeenCalledWith(theme);
-            expect(electronService.sendIpcEvent).toHaveBeenCalledTimes(0);
+            expect(electronService.sendIpcEvent).toHaveBeenCalledTimes(1);
             expect(translateService.use).toHaveBeenCalledWith(defaultLanguage);
         });
     });

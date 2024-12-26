@@ -1,9 +1,11 @@
 /* eslint-disable no-useless-catch */
-import { app, BrowserWindow, Menu, session } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import * as path from 'path';
 import * as url from 'url';
 import { Api } from './api';
 import { AppMenu } from './menu';
+
+const fixPath = require('fix-path');
 const {
     setupTitlebar,
     attachTitlebarToWindow,
@@ -11,10 +13,10 @@ const {
 const contextMenu = require('electron-context-menu');
 const Store = require('electron-store');
 const store = new Store();
-const os = require('os');
 
 const WINDOW_BOUNDS = 'WINDOW_BOUNDS';
 
+fixPath();
 setupTitlebar();
 let win: BrowserWindow | null = null;
 const args = process.argv.slice(1),
@@ -51,7 +53,7 @@ function createWindow(): BrowserWindow {
     require('@electron/remote/main').enable(win.webContents);
 
     if (serve) {
-        win.webContents.openDevTools();
+        win.on('ready-to-show', () => win?.webContents.openDevTools());
         win.loadURL('http://localhost:4200');
     } else {
         win.loadURL(
@@ -118,7 +120,7 @@ try {
         const menu = new AppMenu(win);
         Menu.setApplicationMenu(menu.getMenu());
         api.setMainWindow(win);
-
+        
         // create hidden window for epg worker
         createEpgWorkerWindow();
     });
@@ -146,18 +148,6 @@ try {
     app.on('before-quit', () => {
         if (win) store.set(WINDOW_BOUNDS, win.getNormalBounds());
     });
-
-    if (serve && process.platform === 'darwin') {
-        // add redux dev tools extension
-        const reduxDevToolsPath = path.join(
-            os.homedir(),
-            'Library/Application Support/Google/Chrome/Default/Extensions/lmhkpmbekcpmknklioeibfkpmmfibljd/3.0.19_14'
-        );
-
-        app.whenReady().then(async () => {
-            await session.defaultSession.loadExtension(reduxDevToolsPath);
-        });
-    }
 } catch (e) {
     // Catch Error
     throw e;
